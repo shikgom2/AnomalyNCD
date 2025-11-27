@@ -141,18 +141,44 @@ class DistributedWeightedSampler(torch.utils.data.distributed.DistributedSampler
 def get_pseudo_label_weights(image_path, anomaly_thred, base_category, anomaly_score_json):
     """
     Get the weights for the pseudo labels correction.
+
+    image_path: list of full paths for sub-images (both base(AeBAD) + novel(MVTec) mixed)
+    base_category: e.g. 'AeBAD_crop'
+    anomaly_score_json: scores json for *novel* sub-images
     """
     sample_weights = []
+    # 1이면 labeled(AeBAD), 0이면 unlabeled(MVTec)
     mask_lab = torch.ones(len(image_path))
-    # load anomaly score for each sub-image.
+
     for i, pth in enumerate(image_path):
-        if base_category not in pth:
+        # 윈도우 경로를 리눅스 스타일로 통일
+        norm_pth = pth.replace("\\", "/")
+
+        # base_category(AeBAD_crop)가 경로에 없으면 => unlabeled (MVTec)
+        if base_category not in norm_pth:
             mask_lab[i] = 0
-            if anomaly_thred==-1:
-                sample_weights.append(0)
+
+            # pseudo label weight를 쓰지 않는 경우
+            if anomaly_thred == -1:
+                sample_weights.append(0.0)
             else:
-                ano_type = pth.split('/')[-2]
-                filename = pth.split('/')[-1]
-                ano_score = anomaly_score_json[ano_type][filename]
-                sample_weights.append(max(0.0, anomaly_thred-ano_score))
+                parts = norm_pth.split("/")
+                # 예) data/mvtec_musc_crop/bottle/images/broken_large/000_crop0.png
+                # parts = ["data", "mvtec_musc_crop", "bottle", "images", "broken_large", "000_crop0.png"]
+                ano_type = parts[-2]   # "broken_large"
+                filename = parts[-1]   # "000_crop0.png"
+
+                # json에 키가 없으면 그냥 0으로 처리해서 크래시 안 나게
+                try:
+                    ano_score = anomaly_score_json[ano_type][filename]
+                except KeyError:
+                    ano_score = 0.0
+
+                # anomaly_thred - ano_score 가 클수록 더 신뢰도 높은 pseudo label
+                sample_weights.append(max(0.0, anomaly_thred - ano_score))
+
+        # base_category가 포함된 경로(AeBAD_crop)는 labeled 샘플 → sample_weights에 안 넣음
+
+    # sample_weights 길이 = "언라벨 샘플 수"
+    # MGRL에서 sample_weights * 2 해서 뷰 두 개에 맞춰줌
     return sample_weights, mask_lab

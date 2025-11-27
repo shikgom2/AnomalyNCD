@@ -119,10 +119,28 @@ class AnomalyNCD():
         sample_weights = torch.DoubleTensor(sample_weights)
         sampler = torch.utils.data.WeightedRandomSampler(sample_weights, num_samples=len(train_dataset), replacement=True)
 
-        train_loader = DataLoader(train_dataset, num_workers=self.args.num_workers, batch_size=self.args.batch_size, shuffle=False,
-                            sampler=sampler, drop_last=False, pin_memory=False)
-        test_loader = DataLoader(test_dataset, num_workers=self.args.num_workers,
-                                        batch_size=self.args.batch_size, shuffle=False, pin_memory=False)
+        # ✅ 윈도우에서는 멀티프로세싱(worker>0) 쓰면 lambda 때문에 에러 → 0으로 고정
+        if os.name == "nt":
+            num_workers = 0
+        else:
+            num_workers = self.args.num_workers
+
+        train_loader = DataLoader(
+            train_dataset,
+            num_workers=num_workers,
+            batch_size=self.args.batch_size,
+            shuffle=False,
+            sampler=sampler,
+            drop_last=False,
+            pin_memory=False,
+        )
+        test_loader = DataLoader(
+            test_dataset,
+            num_workers=num_workers,
+            batch_size=self.args.batch_size,
+            shuffle=False,
+            pin_memory=False,
+        )
 
         return train_loader, test_loader
 
@@ -448,7 +466,7 @@ class AnomalyNCD():
                 binary_map = cv2.imread(binary_map_file_path)
                 binary_map = cv2.cvtColor(binary_map, cv2.COLOR_BGR2GRAY)
                 sub_images_list, sub_masks_list, anomaly_crop_score = bin.crop_sub_image_mask(image=image, mask=binary_map, anomaly_map=anomaly_map, est_anomaly_num=est_ano_num)
-                prefix = image_path.split('/')[-1].split('.')[0]
+                prefix = os.path.splitext(os.path.basename(image_path))[0]
                 for i, img in enumerate(sub_images_list): 
                     img.save(os.path.join(save_path, "{}_crop{}.png".format(prefix, i)))
                 for i, img in enumerate(sub_masks_list): 

@@ -64,7 +64,7 @@ def init_experiment(args, runner_name=None, exp_id=None):
             raise ValueError("Need to specify the experiment name")
         
         # Unique identifier for experiment
-        now = '{}_{}_({}.{:02d}.{:02d}_{:02d}:{:02d}'.format(
+        now = '{}_{}_({}.{:02d}.{:02d}_{:02d}-{:02d})'.format(
             args.exp_name,
             args.category,
             datetime.now().year,
@@ -72,8 +72,7 @@ def init_experiment(args, runner_name=None, exp_id=None):
             datetime.now().day,
             datetime.now().hour,
             datetime.now().minute
-            ) + ')'
-
+        )
 
         log_dir = os.path.join(root_dir, 'log', now)
 
